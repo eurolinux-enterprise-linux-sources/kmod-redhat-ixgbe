@@ -1,0 +1,47 @@
+Commit 9e1e5a642e28c "[net] gso: Support partial segmentation offload"
+(upstream 802ab55adc39a) and several following introduce support for GSO
+partial offlod on the kernel network stack side. Driver support has been added
+in 5517f5c1beae3 "[netdrv] ixgbe/ixgbevf: Add support for GSO partial"
+(upstream b83e30104bd9) (and fixed up a bit in the following commits like
+7bc508f794 and 3eb624d908a0).
+
+Backport changes: since 7.3 kernel has no GSO partial support, define
+NETIF_F_TSO_MANGLEID and NETIF_F_GSO_PARTIAL flags as 0 and remove part of
+ixgbe_probe with GSO partial features setup.
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-13 03:15:00.034757616 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-13 03:26:14.037193833 +0100
+@@ -14,6 +14,10 @@
+ }
+ 
+ 
++#define NETIF_F_TSO_MANGLEID 0
++#define NETIF_F_GSO_PARTIAL  0
++
++
+ /* -- List of parsable UDP tunnel types --
+  *
+  * Adding to this list will result in serious debate.  The main issue is
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-13 02:41:42.746077167 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-13 03:39:52.620944076 +0100
+@@ -9257,17 +9257,6 @@
+ 			   NETIF_F_RXCSUM |
+ 			   NETIF_F_HW_CSUM;
+ 
+-#define IXGBE_GSO_PARTIAL_FEATURES (NETIF_F_GSO_GRE | \
+-				    NETIF_F_GSO_GRE_CSUM | \
+-				    NETIF_F_GSO_IPIP | \
+-				    NETIF_F_GSO_SIT | \
+-				    NETIF_F_GSO_UDP_TUNNEL | \
+-				    NETIF_F_GSO_UDP_TUNNEL_CSUM)
+-
+-	netdev->gso_partial_features = IXGBE_GSO_PARTIAL_FEATURES;
+-	netdev->features |= NETIF_F_GSO_PARTIAL |
+-			    IXGBE_GSO_PARTIAL_FEATURES;
+-
+ 	if (hw->mac.type >= ixgbe_mac_82599EB)
+ 		netdev->features |= NETIF_F_SCTP_CRC;
+ 

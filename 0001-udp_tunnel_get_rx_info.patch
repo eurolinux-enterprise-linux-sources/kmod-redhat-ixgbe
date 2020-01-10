@@ -1,0 +1,171 @@
+Commit 6bc6172d010 "[net] Combine GENEVE and VXLAN port notifiers into single
+functions" (upstream commit e7b3db5e60e8) along with 2be6b0029218 "[net] Merge
+VXLAN and GENEVE push notifiers into a single notifier" (upstream commit
+7c46a640de6f) introduced common framework for L2 UDP tunneling protocols such
+as VXLAN and GENEVE.
+
+Commits in ixgbe driver (6f7caecdbf1d6 "[netdrv] ixgbe: Replace
+ndo_add/del_vxlan_port with ndo_add/del_udp_enc_port" (upstream b3a49557d5310)
+and 13bd4d07fcd59 "[netdrv] ixgbe: add support for geneve Rx offload" (upstream
+a21d0822ff69)) follow the suit and start using these new notifiers instead of
+old ones along with addition of GENEVE tunnel offloading support on the relevant
+hardware.
+
+Backport changes:
+ * Add wrapper functions (ixgbe_{add,del}_{vxlan,geneve}_tunnel_port) for the
+   new generic UDP port addition/removal callbacks
+   (ixgbe_{add,del}_udp_tunnel_port), which allow use these new callbacks with
+   old callees (.ndo_{add,del}_{vxlan,geneve}_port).
+ * Wire up these wrappers to the old callees instead new ones
+   (.extended.ndo_udp_tunnel_{add,del}, non-existent in 7.3 kernel).
+ * Add supplement enumerations (udp_parsable_tunnel_type) and types
+   (udp_tunnel_info) which are used by new ixgbe code and do not present in 7.3
+   kernel.
+ * Implement udp_tunnel_get_rx_info() function which calls notifiers both with
+   NETDEV_OFFLOAD_PUSH_VXLAN and NETDEV_OFFLOAD_PUSH_GENEVE events.
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-10 18:08:06.035391156 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-10 18:11:19.807312186 +0100
+@@ -2,6 +2,7 @@
+ #define _RH_IXGBE_BACKPORT_COMPAT_H_
+ 
+ #include <linux/netdevice.h>
++#include <net/udp_tunnel.h>
+ 
+ /* legacy drivers only, netdev_start_xmit() sets txq->trans_start */
+ static inline void netif_trans_update(struct net_device *dev)
+@@ -9,4 +10,41 @@
+ 	dev->trans_start = jiffies;
+ }
+ 
++
++/* -- List of parsable UDP tunnel types --
++ *
++ * Adding to this list will result in serious debate.  The main issue is
++ * that this list is essentially a list of workarounds for either poorly
++ * designed tunnels, or poorly designed device offloads.
++ *
++ * The parsing supported via these types should really be used for Rx
++ * traffic only as the network stack will have already inserted offsets for
++ * the location of the headers in the skb.  In addition any ports that are
++ * pushed should be kept within the namespace without leaking to other
++ * devices such as VFs or other ports on the same device.
++ *
++ * It is strongly encouraged to use CHECKSUM_COMPLETE for Rx to avoid the
++ * need to use this for Rx checksum offload.  It should not be necessary to
++ * call this function to perform Tx offloads on outgoing traffic.
++ */
++enum udp_parsable_tunnel_type {
++	UDP_TUNNEL_TYPE_VXLAN,		/* RFC 7348 */
++	UDP_TUNNEL_TYPE_GENEVE,		/* draft-ietf-nvo3-geneve */
++};
++
++
++struct udp_tunnel_info {
++	unsigned short type;
++	sa_family_t sa_family;
++	__be16 port;
++};
++
++
++static inline void udp_tunnel_get_rx_info(struct net_device *dev)
++{
++	ASSERT_RTNL();
++	call_netdevice_notifiers(NETDEV_OFFLOAD_PUSH_VXLAN, dev);
++	call_netdevice_notifiers(NETDEV_OFFLOAD_PUSH_GENEVE, dev);
++}
++
+ #endif /* #ifndef _RH_IXGBE_BACKPORT_COMPAT_H_ */
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-10 18:07:08.022013578 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-10 18:11:29.464208578 +0100
+@@ -50,7 +50,7 @@
+ #include <linux/if_bridge.h>
+ #include <linux/prefetch.h>
+ #include <scsi/fc/fc_fcoe.h>
+-#include <net/udp_tunnel.h>
++#include <net/geneve.h>
+ #include <net/vxlan.h>
+ 
+ #include "ixgbe.h"
+@@ -8534,6 +8534,32 @@
+ 	IXGBE_WRITE_REG(hw, IXGBE_VXLANCTRL, reg);
+ }
+ 
++static void ixgbe_add_vxlan_tunnel_port(struct net_device *dev,
++					sa_family_t sa_family,
++					__be16 port)
++{
++	struct udp_tunnel_info ti;
++
++	ti.sa_family =	sa_family;
++	ti.port = port;
++	ti.type = UDP_TUNNEL_TYPE_VXLAN;
++
++	ixgbe_add_udp_tunnel_port(dev, &ti);
++}
++
++static void ixgbe_add_geneve_tunnel_port(struct net_device *dev,
++					 sa_family_t sa_family,
++					 __be16 port)
++{
++	struct udp_tunnel_info ti;
++
++	ti.sa_family =	sa_family;
++	ti.port = port;
++	ti.type = UDP_TUNNEL_TYPE_GENEVE;
++
++	ixgbe_add_udp_tunnel_port(dev, &ti);
++}
++
+ /**
+  * ixgbe_del_udp_tunnel_port - Get notifications about removing UDP tunnel ports
+  * @dev: The port's netdev
+@@ -8585,6 +8611,32 @@
+ 	adapter->flags2 |= IXGBE_FLAG2_UDP_TUN_REREG_NEEDED;
+ }
+ 
++static void ixgbe_del_vxlan_tunnel_port(struct net_device *dev,
++					sa_family_t sa_family,
++					__be16 port)
++{
++	struct udp_tunnel_info ti;
++
++	ti.sa_family =	sa_family;
++	ti.port = port;
++	ti.type = UDP_TUNNEL_TYPE_VXLAN;
++
++	ixgbe_del_udp_tunnel_port(dev, &ti);
++}
++
++static void ixgbe_del_geneve_tunnel_port(struct net_device *dev,
++					 sa_family_t sa_family,
++					 __be16 port)
++{
++	struct udp_tunnel_info ti;
++
++	ti.sa_family =	sa_family;
++	ti.port = port;
++	ti.type = UDP_TUNNEL_TYPE_GENEVE;
++
++	ixgbe_del_udp_tunnel_port(dev, &ti);
++}
++
+ static int ixgbe_ndo_fdb_add(struct ndmsg *ndm, struct nlattr *tb[],
+ 			     struct net_device *dev,
+ 			     const unsigned char *addr, u16 vid,
+@@ -8883,8 +8935,10 @@
+ 	.ndo_fdb_add		= ixgbe_ndo_fdb_add,
+ 	.ndo_bridge_setlink	= ixgbe_ndo_bridge_setlink,
+ 	.ndo_bridge_getlink	= ixgbe_ndo_bridge_getlink,
+-	.extended.ndo_udp_tunnel_add	= ixgbe_add_udp_tunnel_port,
+-	.extended.ndo_udp_tunnel_del	= ixgbe_del_udp_tunnel_port,
++	.ndo_add_vxlan_port	= ixgbe_add_vxlan_tunnel_port,
++	.ndo_del_vxlan_port	= ixgbe_del_vxlan_tunnel_port,
++	.ndo_add_geneve_port	= ixgbe_add_geneve_tunnel_port,
++	.ndo_del_geneve_port	= ixgbe_del_geneve_tunnel_port,
+ 	.ndo_features_check	= ixgbe_features_check,
+ 	.extended.ndo_dfwd_add_station	= ixgbe_fwd_add,
+ 	.extended.ndo_dfwd_del_station	= ixgbe_fwd_del,

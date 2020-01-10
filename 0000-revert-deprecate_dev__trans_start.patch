@@ -1,0 +1,39 @@
+Commit 3f2d1d4c998c "[netdrv] replace dev->trans_start update with helper"
+(upstream commit 860e9538a94) replaces all instances of d->trans_start =
+jiffies with netif_trans_update(d). The function netif_trans_update() itself
+introduced in previous commit, e1dc753ce4cd "[net] netdevice: add helper to
+update trans_start" (upstream commit ba162f8eed61).
+
+Backport change: introduce ixgbe_backport_compat.h, which includes
+implementation of netif_trans_update() from "[net] netdevice: add helper to
+update trans_start".
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-10 18:25:48.779989021 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-13 01:57:10.544940341 +0100
+@@ -58,6 +58,8 @@
+ #include "ixgbe_dcb_82599.h"
+ #include "ixgbe_sriov.h"
+ 
++#include "ixgbe_backport_compat.h"
++
+ char ixgbe_driver_name[] = "ixgbe";
+ static const char ixgbe_driver_string[] =
+ 			      "Intel(R) 10 Gigabit PCI Express Network Driver";
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-13 01:42:54.427092313 +0100
+@@ -0,0 +1,12 @@
++#ifndef _RH_IXGBE_BACKPORT_COMPAT_H_
++#define _RH_IXGBE_BACKPORT_COMPAT_H_
++
++#include <linux/netdevice.h>
++
++/* legacy drivers only, netdev_start_xmit() sets txq->trans_start */
++static inline void netif_trans_update(struct net_device *dev)
++{
++	dev->trans_start = jiffies;
++}
++
++#endif /* #ifndef _RH_IXGBE_BACKPORT_COMPAT_H_ */

@@ -1,0 +1,40 @@
+Commit fabee26a41fe "[pci] Add helpers to request/release memory and I/O
+regions" (upstream be9d2e8927ce) introduced pci_{request,release}_mem_regions()
+function helpers, which then utilised in 9b7928d84655 "[netdrv] ethernet/intel:
+Use pci_(request|release)_mem_regions" (upstream 56d766d64ca5c).
+
+Backport change: add implementation of pci_{request,release}_mem_regions() from
+"[pci] Add helpers to request/release memory and I/O regions" to
+ixgbe_backport_comapt.h.
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-10 18:11:39.660099187 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-10 18:11:41.881075358 +0100
+@@ -2,6 +2,7 @@
+ #define _RH_IXGBE_BACKPORT_COMPAT_H_
+ 
+ #include <linux/netdevice.h>
++#include <linux/pci.h>
+ #include <linux/skbuff.h>
+ #include <net/udp_tunnel.h>
+ 
+@@ -54,4 +55,19 @@
+ 	return skb->head + skb->csum_start;
+ }
+ 
++
++static inline int
++pci_request_mem_regions(struct pci_dev *pdev, const char *name)
++{
++	return pci_request_selected_regions(pdev,
++			pci_select_bars(pdev, IORESOURCE_MEM), name);
++}
++
++static inline void
++pci_release_mem_regions(struct pci_dev *pdev)
++{
++	return pci_release_selected_regions(pdev,
++			pci_select_bars(pdev, IORESOURCE_MEM));
++}
++
+ #endif /* #ifndef _RH_IXGBE_BACKPORT_COMPAT_H_ */

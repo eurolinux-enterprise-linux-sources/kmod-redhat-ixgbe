@@ -1,0 +1,38 @@
+Commit eb6f43fb4ce4 "[kernel] list: fix order of arguments for
+hlist_add_after(_rcu)" (upstream 1d023284c31a) introduced new hlist_add_behind
+function, which fixes unnatural argument order used in hlist_add_after
+function. In order to force switch to the new interface and avoid confusion,
+function name has been changed.
+
+Backport change: Add macro shim for hlist_add_behind() which calls
+hlist_add_after() with reversed argument order.
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-10 18:11:47.451015598 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-10 18:11:52.881957330 +0100
+@@ -18,6 +18,12 @@
+ #define NETIF_F_GSO_PARTIAL  0
+ 
+ 
++/*
++ * hlist_add_behind() is a new name for hlist_add_after(), with reversed
++ * argument order.
++ */
++#define hlist_add_behind(a, b) hlist_add_after(b, a)
++
+ /* -- List of parsable UDP tunnel types --
+  *
+  * Adding to this list will result in serious debate.  The main issue is
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_ethtool.c
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_ethtool.c	2017-03-10 18:11:17.613335725 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_ethtool.c	2017-03-10 18:11:52.882957319 +0100
+@@ -42,6 +42,8 @@
+ #include "ixgbe.h"
+ #include "ixgbe_phy.h"
+ 
++#include "ixgbe_backport_compat.h"
++
+ 
+ #define IXGBE_ALL_RAR_ENTRIES 16
+ 

@@ -1,0 +1,54 @@
+Commit a18e51ef4e4b "[net] Update API for VF vlan protocol 802.1ad support"
+(upstream 79aab093a0b5) introduced new version of ndo_set_vf_vlan callback,
+which adds VLAN protocol argument. ixgbe, however, supports only 802.1q, so it
+does not benefits from this change.
+
+Backport changes: revert the commit.
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-13 04:29:57.525396085 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-13 04:29:58.401384204 +0100
+@@ -8905,7 +8905,7 @@
+ 	.ndo_vlan_rx_kill_vid	= ixgbe_vlan_rx_kill_vid,
+ 	.ndo_do_ioctl		= ixgbe_ioctl,
+ 	.ndo_set_vf_mac		= ixgbe_ndo_set_vf_mac,
+-	.extended.ndo_set_vf_vlan	= ixgbe_ndo_set_vf_vlan,
++	.ndo_set_vf_vlan	= ixgbe_ndo_set_vf_vlan,
+ 	.ndo_set_vf_rate	= ixgbe_ndo_set_vf_bw,
+ 	.ndo_set_vf_spoofchk	= ixgbe_ndo_set_vf_spoofchk,
+ 	.ndo_set_vf_rss_query_en = ixgbe_ndo_set_vf_rss_query_en,
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_sriov.c
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_sriov.c	2017-03-13 04:29:43.898580924 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_sriov.c	2017-03-13 04:29:58.403384177 +0100
+@@ -1391,16 +1391,13 @@
+ 	return err;
+ }
+ 
+-int ixgbe_ndo_set_vf_vlan(struct net_device *netdev, int vf, u16 vlan,
+-			  u8 qos, __be16 vlan_proto)
++int ixgbe_ndo_set_vf_vlan(struct net_device *netdev, int vf, u16 vlan, u8 qos)
+ {
+ 	int err = 0;
+ 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
+ 
+ 	if ((vf >= adapter->num_vfs) || (vlan > 4095) || (qos > 7))
+ 		return -EINVAL;
+-	if (vlan_proto != htons(ETH_P_8021Q))
+-		return -EPROTONOSUPPORT;
+ 	if (vlan || qos) {
+ 		/* Check if there is already a port VLAN set, if so
+ 		 * we have to delete the old one first before we
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_sriov.h
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_sriov.h	2017-03-13 04:29:43.895580964 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_sriov.h	2017-03-13 04:29:58.403384177 +0100
+@@ -43,7 +43,7 @@
+ void ixgbe_ping_all_vfs(struct ixgbe_adapter *adapter);
+ int ixgbe_ndo_set_vf_mac(struct net_device *netdev, int queue, u8 *mac);
+ int ixgbe_ndo_set_vf_vlan(struct net_device *netdev, int queue, u16 vlan,
+-			   u8 qos, __be16 vlan_proto);
++			   u8 qos);
+ int ixgbe_link_mbps(struct ixgbe_adapter *adapter);
+ int ixgbe_ndo_set_vf_bw(struct net_device *netdev, int vf, int min_tx_rate,
+ 			int max_tx_rate);

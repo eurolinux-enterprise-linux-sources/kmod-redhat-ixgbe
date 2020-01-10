@@ -1,0 +1,15 @@
+Backport change: bump driver version in order to distinguish between original
+and new, backported, driver.
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-13 03:48:31.172810043 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-13 04:00:31.527776975 +0100
+@@ -70,7 +70,7 @@
+ static char ixgbe_default_device_descr[] =
+ 			      "Intel(R) 10 Gigabit Network Connection";
+ #endif
+-#define DRV_VERSION "4.4.0-k-rh7.3"
++#define DRV_VERSION "4.4.0-k-rh7.4-z"
+ const char ixgbe_driver_version[] = DRV_VERSION;
+ static const char ixgbe_copyright[] =
+ 				"Copyright (c) 1999-2016 Intel Corporation.";

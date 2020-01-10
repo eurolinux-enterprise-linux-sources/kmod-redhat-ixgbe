@@ -1,0 +1,31 @@
+Commit 18ad1c654448 "[net] introduce csum_replace_by_diff() helper" (upstream
+8050c0f0274a "bpf: allow bpf_csum_diff to feed bpf_l3_csum_replace as well")
+introduced csum_replace_by_diff() helper function, which is then utilised in
+5517f5c1beae "[netdrv] ixgbe/ixgbevf: Add support for GSO partial" (upstream
+b83e30104bd9).
+
+Backport change: add implementation of csum_replace_by_diff() from "[net]
+introduce csum_replace_by_diff() helper" to ixgbe_backport_compat.h.
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-10 18:11:41.881075358 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_backport_compat.h	2017-03-10 18:11:44.773044330 +0100
+@@ -4,6 +4,7 @@
+ #include <linux/netdevice.h>
+ #include <linux/pci.h>
+ #include <linux/skbuff.h>
++#include <net/checksum.h>
+ #include <net/udp_tunnel.h>
+ 
+ /* legacy drivers only, netdev_start_xmit() sets txq->trans_start */
+@@ -70,4 +71,10 @@
+ 			pci_select_bars(pdev, IORESOURCE_MEM));
+ }
+ 
++
++static inline void csum_replace_by_diff(__sum16 *sum, __wsum diff)
++{
++	*sum = csum_fold(csum_add(diff, ~csum_unfold(*sum)));
++}
++
+ #endif /* #ifndef _RH_IXGBE_BACKPORT_COMPAT_H_ */

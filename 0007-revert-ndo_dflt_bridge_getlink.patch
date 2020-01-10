@@ -1,0 +1,19 @@
+Commit 9852b8f87b28 "[net] switchdev: add VLAN support for port's
+bridge_getlink" (upstream 7d4f8d871ab1) changed the interface for
+ndo_dflt_bridge_getlink() function.
+
+Backport change: revert the changes.
+Index: src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c
+===================================================================
+--- src.orig/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-10 18:11:47.454015566 +0100
++++ src/drivers/net/ethernet/intel/ixgbe/ixgbe_main.c	2017-03-10 18:11:50.186986244 +0100
+@@ -8773,8 +8773,7 @@
+ 		return 0;
+ 
+ 	return ndo_dflt_bridge_getlink(skb, pid, seq, dev,
+-				       adapter->bridge_mode, 0, 0, nlflags,
+-				       filter_mask, NULL);
++				       adapter->bridge_mode, 0, 0, nlflags);
+ }
+ 
+ static void *ixgbe_fwd_add(struct net_device *pdev, struct net_device *vdev)
